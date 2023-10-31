@@ -3,10 +3,15 @@ import numpy as np
 import time
 import ttc
 import arrow
+import command
 
 prev_time = time.time()
 prev_time2 = time.time()
 frame_buffer = []
+
+# TCPクライアントのセットアップ
+command = command.Command()
+command.connect('127.0.0.1', 8989, 1024)
 
 # カメラストリームのセットアップ
 cap = cv2.VideoCapture('udp://@0.0.0.0:11113')
@@ -41,7 +46,7 @@ while True:
 
         prev_time = current_time
 
-    if elapsed_time2 >= 1: # 1秒ごとに処理
+    if elapsed_time2 >= 0.5: # 0.5秒ごとに処理
         
         #矢印判定
         arrow.Arrow().analysis(frame)
