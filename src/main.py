@@ -8,6 +8,7 @@ import command
 prev_time = time.time()
 prev_time2 = time.time()
 frame_buffer = []
+close_count = 0
 
 # TCPクライアントのセットアップ
 command = command.Command()
@@ -22,7 +23,7 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 270)
 ttc = ttc.TTC()
 
 # TTCの警告閾値
-TTC_THRESHOLD = 0.1 #比較的厳しめ
+TTC_THRESHOLD = 0.1 # 比較的厳しめ
 
 while True:
     # ビデオフレームの読み込み
@@ -39,27 +40,36 @@ while True:
 
     if elapsed_time >= 0.1:  # 0.1秒ごとに処理
 
-        #TTC計算
+        # TTC計算
         ttc_value = ttc.analysis(frame)
         if ttc_value is not None:
             frame_buffer.append(ttc_value)
 
         prev_time = current_time
 
-    if elapsed_time2 >= 0.5: # 0.5秒ごとに処理
+    if elapsed_time2 >= 0.25: # 0.25秒ごとに処理
         
-        #矢印判定
+        # 矢印判定
         arrow.Arrow().analysis(frame)
+        #todo
 
         prev_time2 = current_time
 
     # TTCの平均を計算して警告を出す
     if len(frame_buffer) == 5:
         average_ttc = np.mean(frame_buffer)
-        print(average_ttc)
+        print(f"TTC: {average_ttc}")
+
+        # 至近距離判定カウント
         if average_ttc < TTC_THRESHOLD:
-            print("oh! Object is very close.")
-            #数回でstopコマンド送信
+            print("TTC: Object is very close.")
+            # 数回でstopコマンド送信
+            close_count += 1
+            if(close_count >= 5):
+                command.send("command") # todo
+        else:
+            close_count = 0
+
         frame_buffer = []
     
     # 'q'キーで終了
