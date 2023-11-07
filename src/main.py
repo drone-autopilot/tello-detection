@@ -50,8 +50,13 @@ while True:
     if elapsed_time2 >= 0.25: # 0.25秒ごとに処理
         
         # 矢印判定
-        direction = arrow.Arrow().analysis(frame)
+        direction, relative, position = arrow.Arrow().analysis(frame)
+        if((direction is not None) & (relative is not None) & (position is not None)):
+            #todoそれぞれでnone判定したほうがいいかも
+            lr, ud, dx, dy = position
+            print(f"Arrow: {direction}, {relative}, {lr}:{dx}, {ud}:{dy}")
         #todo 同方向検知5回程度で操作実行？→実行中は判定結果加算しない
+        #     距離を測定して前方後方位置調整
 
         prev_time2 = current_time
 
