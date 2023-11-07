@@ -50,8 +50,8 @@ while True:
     if elapsed_time2 >= 0.25: # 0.25秒ごとに処理
         
         # 矢印判定
-        arrow.Arrow().analysis(frame)
-        #todo
+        direction = arrow.Arrow().analysis(frame)
+        #todo 同方向検知5回程度で操作実行？→実行中は判定結果加算しない
 
         prev_time2 = current_time
 
@@ -63,10 +63,10 @@ while True:
         # 至近距離判定カウント
         if average_ttc < TTC_THRESHOLD:
             print("TTC: Object is very close.")
-            # 数回でstopコマンド送信
+            # 数回でstopコマンド送信→実行後は旋回＆一定時間判定結果加算しない
             close_count += 1
-            if(close_count >= 5):
-                command.send("command") # todo
+            #if(close_count >= 5):
+                #command.send("command") # todo
         else:
             close_count = 0
 
