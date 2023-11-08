@@ -58,7 +58,7 @@ class Arrow:
     
     def determine_arrow_position(self, center, frame_width, frame_height):
         """
-        todo
+        矢印の中心点から矢印の位置を計算
         """
         if center is None: return None
 
@@ -147,9 +147,4 @@ class Arrow:
             x_position, y_position, delta_x, delta_y = self.determine_arrow_position(center, frame_width, frame_height)
             position_info = (x_position, y_position, delta_x, delta_y)
 
-
-        # 出力
-        cv2.namedWindow('img', cv2.WINDOW_NORMAL)
-        cv2.imshow("img", frame)
-
-        return arrow_direction, relative_size, position_info
+        return frame, arrow_direction, relative_size, position_info
