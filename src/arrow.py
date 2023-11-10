@@ -118,10 +118,9 @@ class Arrow:
         position_info = None
 
         # 点判定
-        arclen = cv2.arcLength(max_contour, True)
-        #approx = cv2.approxPolyDP(max_contour, arclen * 1.0e-2, True)
         epsilon = 0.03 * cv2.arcLength(max_contour, True)
         approx = cv2.approxPolyDP(max_contour, epsilon, True)
+
         n_gon = len(approx)
         if n_gon == 7:
             for p in max_contour:
@@ -134,7 +133,7 @@ class Arrow:
                 center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
             else:
                 # 重心を見つけることができない場合は、エラーを返すか、デフォルト値を設定
-                return None
+                return frame, None, None, None
             
             # 画像のサイズを取得
             frame_height, frame_width = frame.shape[:2]

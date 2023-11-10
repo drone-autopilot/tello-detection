@@ -5,8 +5,9 @@ import ttc
 import arrow
 import command
 import threading
+import queue
 
-debug = True
+debug = False
 
 prev_time = time.time()
 prev_time2 = time.time()
@@ -21,21 +22,20 @@ old_direction = ""
 is_turn = False
 
 is_moving = False
+is_exit = False
+
+frame_queue = queue.Queue()
+g_frame = None
 
 # TCPクライアントのセットアップ
 command = command.Command()
 command.connect('127.0.0.1', 8989, 1024, debug)
 
-# カメラストリームのセットアップ
-cap = cv2.VideoCapture('udp://@0.0.0.0:11113')
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 270)
-
 # TTC用パラメータの初期化
 ttc = ttc.TTC()
 
 # TTCの警告閾値
-TTC_THRESHOLD = 0.1 # 比較的厳しめ
+TTC_THRESHOLD = 0.08
 
 def show_arrow_info(frame, text):
     """
@@ -98,119 +98,167 @@ def move_drone():
     """
     ドローンの制御関数
     """
-    global is_moving, is_turn, old_direction, is_avoid
+    global is_moving, is_turn, old_direction, is_avoid, is_exit
 
     while True:
-        print(time.time())
+        if is_exit:
+            rc("0", "0", "0", "0")
+            break
 
         if not is_moving:
             is_moving = True
-            takeoff()
+            # takeoff()
 
         if is_moving & is_turn:
             if(old_direction == "Left"):
-                ccw("90")
+                # rc("0", "0", "0", "0")
+                # ccw("90")
                 is_turn = False
 
             elif(old_direction == "Right"):
-                cw("90")
+                # rc("0", "0", "0", "0")
+                # cw("90")
                 is_turn = False
 
         if is_moving & is_avoid:
-            rc("0", "0", "0", "0")
-            time.sleep(2)
-            rc("0", "-10", "0", "0")
-            time.sleep(2)
-            rc("0", "0", "0", "0")
+            #land()
             is_avoid = False
 
-        if is_moving:
-            rc("0", "10", "0", "0")
+        # if is_moving & (not is_avoid) & (not is_turn):
+            # rc("0", "10", "0", "0")
+
+        time.sleep(0.1)
 
 dorone_thread = threading.Thread(target=move_drone)
 dorone_thread.start()
 
+def calc_ttc():
+    """
+    ttc計算処理
+    """
+    global g_frame, prev_time, frame_buffer, close_count, is_avoid, is_turn, is_exit
+    
+    while not is_exit:
+        if g_frame is None:
+            continue
+
+        current_time = time.time()
+        elapsed_time = current_time - prev_time
+
+        if elapsed_time >= 0.1:  # 0.1秒ごとに処理
+
+            # TTC計算
+            ttc_value = ttc.analysis(g_frame)
+            if ttc_value is not None:
+                frame_buffer.append(ttc_value)
+
+            prev_time = current_time
+
+        # TTCの平均を計算して警告を出す
+        if len(frame_buffer) == 5:
+            average_ttc = np.mean(frame_buffer)
+            print(f"TTC: {average_ttc}")
+
+            # 至近距離判定カウント
+            if average_ttc < TTC_THRESHOLD:
+                print("TTC: Object is very close.")
+                close_count += 1
+                # if((not is_avoid) & (not is_turn)):
+                    # 5連続以上で接近判定になったら停止させ回避行動を開始
+                    # if(close_count >= 5):
+                        # is_avoid = True
+            else:
+                close_count = 0
+
+            frame_buffer = []
+
+ttc_thread = threading.Thread(target=calc_ttc)
+ttc_thread.start()
+
+def calc_arrow():
+    """
+    矢印判定処理
+    """
+    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, prev_time2, frame_queue
+
+    while not is_exit:
+        if g_frame is None:
+            continue
+
+        # フレーム間の経過時間を計算
+        current_time = time.time()
+        elapsed_time2 = current_time  - prev_time2
+
+        # 矢印判定処理
+        if elapsed_time2 >= 0.1: # 0.1秒ごとに処理
+        
+            # 矢印判定とカメラ映像取得
+            new_frame, direction, relative, position = arrow.Arrow().analysis(g_frame)
+            if((direction is not None) & (relative is not None) & (position is not None)):
+                lr, ud, dx, dy = position
+                show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
+
+                # 矢印が近すぎる場合は後進
+                _  = "todo"
+
+                # 一定の距離以内に近づかないと数えない
+                if(relative >= 40000):
+                    if(old_direction == direction): arrow_count += 1
+                    old_direction = direction
+
+                # 20回連続で方向検知で方向転換
+                if((not is_avoid) & (not is_turn)):
+                    if(arrow_count >= 20):
+                        is_turn = True
+
+            else:
+                arrow_count = 0
+                old_direction = ""
+
+            frame_queue.put(new_frame)
+
+            prev_time2 = current_time
+
+arrow_thread = threading.Thread(target=calc_arrow)
+arrow_thread.start()
+
+def camera_thread():
+    """
+    カメラ映像を取得する
+    """
+    global g_frame
+
+    # カメラストリームのセットアップ
+    cap = cv2.VideoCapture('udp://@0.0.0.0:11113')
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 270)
+    while True:
+        if is_exit:
+            break
+
+        _, frame = cap.read()
+        
+        # 無効なフレームはスキップ
+        if frame is None or frame.size == 0:
+            continue
+
+        g_frame = frame
+
+    cap.release()
+
+
+video_thread = threading.Thread(target=camera_thread)
+video_thread.start()
+
 while True:
-    # ドローン制御処理
-    move_drone()
-
-    # ビデオフレームの読み込み
-    ret, frame = cap.read()
-
-    # 無効なフレームはスキップ
-    if frame is None or frame.size == 0:
-        continue
-
-    # フレーム間の経過時間を計算
-    current_time = time.time()
-    elapsed_time = current_time - prev_time
-    elapsed_time2 = current_time  - prev_time2
-
-    if elapsed_time >= 0.1:  # 0.1秒ごとに処理
-
-        # TTC計算
-        ttc_value = ttc.analysis(frame)
-        if ttc_value is not None:
-            frame_buffer.append(ttc_value)
-
-        prev_time = current_time
-
-    # TTCの平均を計算して警告を出す
-    if len(frame_buffer) == 5:
-        average_ttc = np.mean(frame_buffer)
-        print(f"TTC: {average_ttc}")
-
-        # 至近距離判定カウント
-        if average_ttc < TTC_THRESHOLD:
-            print("TTC: Object is very close.")
-            close_count += 1
-            if((not is_avoid) & (not is_turn)):
-                # 5連続以上で接近判定になったら停止させ回避行動を開始
-                if(close_count >= 5):
-                    is_avoid = True
-        else:
-            close_count = 0
-
-        frame_buffer = []
-
-    # 矢印判定処理
-    if elapsed_time2 >= 0.25: # 0.25秒ごとに処理
-    
-        # 矢印判定とカメラ映像取得
-        new_frame, direction, relative, position = arrow.Arrow().analysis(frame)
-        if((direction is not None) & (relative is not None) & (position is not None)):
-            lr, ud, dx, dy = position
-            show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
-
-            # 矢印が近すぎる場合は後進
-            _  = "todo"
-
-            # 一定の距離以内に近づかないと数えない
-            if(relative >= 60000):
-                if(old_direction == direction): arrow_count += 1
-                old_direction = direction
-
-            # 5回連続で方向検知で方向転換
-            if((not is_avoid) & (not is_turn)):
-                if(arrow_count >= 5):
-                    is_turn = True
-
-        else:
-            arrow_count = 0
-            old_direction = ""
-
-        # 出力
-        cv2.namedWindow('Tello-Detection', cv2.WINDOW_NORMAL)
-        cv2.imshow("Tello-Detection", new_frame)
-
-        prev_time2 = current_time
-    
-    
-    # 'Esc'キーで終了
+    frame = frame_queue.get()
+    cv2.imshow("Tello-Detection", frame)
     if cv2.waitKey(1) & 0xFF == 27:
-        land()
+        is_exit = True
         break
 
-cap.release()
 cv2.destroyAllWindows()
+arrow_thread.join()
+ttc_thread.join()
 dorone_thread.join()
+video_thread.join()
