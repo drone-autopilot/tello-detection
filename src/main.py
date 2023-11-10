@@ -4,8 +4,9 @@ import time
 import ttc
 import arrow
 import command
-import asyncio
-import sys
+import threading
+
+debug = True
 
 prev_time = time.time()
 prev_time2 = time.time()
@@ -23,7 +24,7 @@ is_moving = False
 
 # TCPクライアントのセットアップ
 command = command.Command()
-command.connect('127.0.0.1', 8989, 1024)
+command.connect('127.0.0.1', 8989, 1024, debug)
 
 # カメラストリームのセットアップ
 cap = cv2.VideoCapture('udp://@0.0.0.0:11113')
@@ -37,6 +38,9 @@ ttc = ttc.TTC()
 TTC_THRESHOLD = 0.1 # 比較的厳しめ
 
 def show_arrow_info(frame, text):
+    """
+    cv2の画面内に矢印の情報を表示します
+    """
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 1
     thickness = 2
@@ -54,34 +58,77 @@ def show_arrow_info(frame, text):
     # フレームにテキストを描画
     cv2.putText(frame, text, (text_offset_x, text_offset_y), font, font_scale, (0, 0, 0), thickness)
 
+def takeoff():
+    """
+    takeoffコマンドを送信
+    """
+    command.send("takeoff")
+
+def land():
+    """
+    landコマンドを送信
+    """
+    command.send("land")
+
+def rc(erlon: str, elevator: str, srotol: str, lador: str):
+    """
+    rcコマンドを送信
+    erlon: 正で右移動、負で左移動
+    elevator: 正で前進、負で後進
+    srotol: 正で上昇、負で下降
+    lador: 正で右旋回、負で左旋回
+    """
+    command.send(f"rc {erlon} {elevator} {srotol} {lador}")
+
+def cw(degree: str):
+    """
+    cwコマンドを送信
+    時計回りに指定した角度分旋回する
+    """
+    command.send(f"cw {degree}")
+
+def ccw(degree: str):
+    """
+    ccwコマンドを送信
+    反時計回りに指定した角度分旋回する
+    """
+    command.send(f"ccw {degree}")
+
 def move_drone():
+    """
+    ドローンの制御関数
+    """
     global is_moving, is_turn, old_direction, is_avoid
 
-    if not is_moving:
-        is_moving = True
-        # time.sleep(10)
-        command.send("takeoff")
-        # command.send("rc 0 0 0 0")
+    while True:
+        print(time.time())
 
-    if is_moving & is_turn:
-        if(old_direction == "Left"):
-            # command.send("rc 0 0 0 0")
-            command.send("ccw 90")
-            # time.sleep(3)
-            is_turn = False
-        elif(old_direction == "Right"):
-            # command.send("rc 0 0 0 0")
-            command.send("cw 90")
-            # time.sleep(3)
-            is_turn = False
+        if not is_moving:
+            is_moving = True
+            takeoff()
 
-    # if is_moving & is_avoid:
-        # command.send("rc 0 0 0 0")
-        # command.send("land")
-        # time.sleep(3)
-        # sys.exit()
-        # is_avoid = False
+        if is_moving & is_turn:
+            if(old_direction == "Left"):
+                ccw("90")
+                is_turn = False
 
+            elif(old_direction == "Right"):
+                cw("90")
+                is_turn = False
+
+        if is_moving & is_avoid:
+            rc("0", "0", "0", "0")
+            time.sleep(2)
+            rc("0", "-10", "0", "0")
+            time.sleep(2)
+            rc("0", "0", "0", "0")
+            is_avoid = False
+
+        if is_moving:
+            rc("0", "10", "0", "0")
+
+dorone_thread = threading.Thread(target=move_drone)
+dorone_thread.start()
 
 while True:
     # ドローン制御処理
@@ -120,9 +167,7 @@ while True:
             if((not is_avoid) & (not is_turn)):
                 # 5連続以上で接近判定になったら停止させ回避行動を開始
                 if(close_count >= 5):
-                    # is_avoid = True
-                    # command.send("rc 0 0 0 0") # todo
-                    _ = "todo"
+                    is_avoid = True
         else:
             close_count = 0
 
@@ -137,8 +182,11 @@ while True:
             lr, ud, dx, dy = position
             show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
 
+            # 矢印が近すぎる場合は後進
+            _  = "todo"
+
             # 一定の距離以内に近づかないと数えない
-            if(relative >= 8000):
+            if(relative >= 60000):
                 if(old_direction == direction): arrow_count += 1
                 old_direction = direction
 
@@ -160,7 +208,9 @@ while True:
     
     # 'Esc'キーで終了
     if cv2.waitKey(1) & 0xFF == 27:
+        land()
         break
 
 cap.release()
 cv2.destroyAllWindows()
+dorone_thread.join()

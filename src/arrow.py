@@ -85,6 +85,9 @@ class Arrow:
         return x_position, y_position, delta_x, delta_y
     
     def analysis(self, frame):
+        """
+        矢印検知
+        """
         # 中央値ブラー
         mask_img = cv2.medianBlur(frame, 5)
 
