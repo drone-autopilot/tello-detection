@@ -11,6 +11,6 @@ class Command:
         if(self.socket is None): return
         self.socket.send(cmd.encode('utf-8'))
         print("[*]Sended a command : {}".format(cmd))
-        if(self.buf_size is not None):
-            response = self.socket.recv(self.buf_size)
-            print("[*]Received a response : {}".format(response))
+        # if(self.buf_size is not None):
+        #    response = self.socket.recv(self.buf_size)
+        #    print("[*]Received a response : {}".format(response))

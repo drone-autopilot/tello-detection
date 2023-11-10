@@ -4,6 +4,8 @@ import time
 import ttc
 import arrow
 import command
+import asyncio
+import sys
 
 prev_time = time.time()
 prev_time2 = time.time()
@@ -16,6 +18,8 @@ is_avoid = False
 arrow_count = 0
 old_direction = ""
 is_turn = False
+
+is_moving = False
 
 # TCPクライアントのセットアップ
 command = command.Command()
@@ -50,7 +54,39 @@ def show_arrow_info(frame, text):
     # フレームにテキストを描画
     cv2.putText(frame, text, (text_offset_x, text_offset_y), font, font_scale, (0, 0, 0), thickness)
 
+def move_drone():
+    global is_moving, is_turn, old_direction, is_avoid
+
+    if not is_moving:
+        is_moving = True
+        # time.sleep(10)
+        command.send("takeoff")
+        # command.send("rc 0 0 0 0")
+
+    if is_moving & is_turn:
+        if(old_direction == "Left"):
+            # command.send("rc 0 0 0 0")
+            command.send("ccw 90")
+            # time.sleep(3)
+            is_turn = False
+        elif(old_direction == "Right"):
+            # command.send("rc 0 0 0 0")
+            command.send("cw 90")
+            # time.sleep(3)
+            is_turn = False
+
+    # if is_moving & is_avoid:
+        # command.send("rc 0 0 0 0")
+        # command.send("land")
+        # time.sleep(3)
+        # sys.exit()
+        # is_avoid = False
+
+
 while True:
+    # ドローン制御処理
+    move_drone()
+
     # ビデオフレームの読み込み
     ret, frame = cap.read()
 
@@ -84,14 +120,11 @@ while True:
             if((not is_avoid) & (not is_turn)):
                 # 5連続以上で接近判定になったら停止させ回避行動を開始
                 if(close_count >= 5):
-                    is_avoid = True
-                    command.send("ABCDEFGHIJKLNMOPQRSTUVWXYZ1234567890") # todo
+                    # is_avoid = True
+                    # command.send("rc 0 0 0 0") # todo
+                    _ = "todo"
         else:
             close_count = 0
-
-        if is_avoid:
-            # 一定時間(回避処理終了)後再検査 (okのレスポンスでも良い？)
-            _ = "todo"
 
         frame_buffer = []
 
@@ -105,7 +138,7 @@ while True:
             show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
 
             # 一定の距離以内に近づかないと数えない
-            if(relative >= 100000):
+            if(relative >= 8000):
                 if(old_direction == direction): arrow_count += 1
                 old_direction = direction
 
@@ -113,11 +146,6 @@ while True:
             if((not is_avoid) & (not is_turn)):
                 if(arrow_count >= 5):
                     is_turn = True
-                    command.send("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ") # todo
-
-            elif is_turn:
-                # 位置調整など 指示ごとに一定時間経過後処理 (okレスポンスでも良い？)
-                _ = "todo"
 
         else:
             arrow_count = 0
