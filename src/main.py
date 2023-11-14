@@ -31,6 +31,25 @@ import queue
 #                                                                                              ■             ■          ■■■■■■                 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""";debug = True;""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
+# TTCの警告しきい値
+TTC_THRESHOLD = 0.075
+# 矢印判定のしきい値
+ARROW_Z_THRESHOLD = 90000 # 約35cm以上
+ARROW_X_THRESHOLD = 0 # 中央
+# 矢印前後位置調整用誤差範囲
+ARROW_Z_ERROR_RANGE = 10000 # 80000-100000
+ARROW_X_ERROR_RANGE = 50 # -50-50
+# 高さ調整のしきい値
+TOF_THRESHOLD = 120
+# 高さ調節の誤差範囲
+TOF_ERROR_RANGE = 5 # 115-125
+
+"""
+TODO
+takeoff→ok→前進開始時ToF判定開始
+矢印の位置から位置調整
+"""
+
 prev_time = time.time()
 prev_time2 = time.time()
 
@@ -55,9 +74,6 @@ command.connect('127.0.0.1', 8989, 1024, debug)
 
 # TTC用パラメータの初期化
 ttc = ttc.TTC()
-
-# TTCの警告閾値
-TTC_THRESHOLD = 0.08
 
 def show_arrow_info(frame, text):
     """
@@ -222,7 +238,7 @@ def calc_arrow():
                 _  = "todo"
 
                 # 一定の距離以内に近づかないと数えない
-                if(relative >= 40000):
+                if(relative >= ARROW_Z_THRESHOLD):
                     if(old_direction == direction): arrow_count += 1
                     old_direction = direction
 
