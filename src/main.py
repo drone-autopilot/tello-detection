@@ -48,6 +48,7 @@ TOF_ERROR_RANGE = 5 # 115-125
 TODO
 takeoff→ok→前進開始時ToF判定開始
 矢印の位置から位置調整
+TTC検知後の処理
 """
 
 prev_time = time.time()
@@ -147,21 +148,33 @@ def move_drone():
         if not is_moving:
             is_moving = True
             takeoff()
+            time.sleep(2) # 2秒待機
+            continue
 
         if is_moving & is_turn:
             if(old_direction == "Left"):
                 rc("0", "0", "0", "0")
                 ccw("90")
+                time.sleep(2) # 2秒待機
                 is_turn = False
+                continue
 
             elif(old_direction == "Right"):
                 rc("0", "0", "0", "0")
                 cw("90")
+                time.sleep(2) # 2秒待機
                 is_turn = False
+                continue
 
         if is_moving & is_avoid:
-            land()
+            rc("0", "0", "0", "0")
+            time.sleep(5) # 5秒待機
             is_avoid = False
+            continue
+
+        if is_moving:
+            rc("0", "5", "0", "0")
+            continue
 
         time.sleep(0.1)
 
