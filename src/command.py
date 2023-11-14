@@ -11,6 +11,10 @@ class Command:
     def send(self, cmd: str):
         if self.debug:
             print(f"<---{cmd}--->")
+            self.socket.send("command".encode('utf-8'))
+            if(self.buf_size is not None):
+                response = self.socket.recv(self.buf_size)
+                print("[*]Received a response : {}".format(response))
         else:
             self.socket.send(cmd.encode('utf-8'))
             print("[*]Sended a command : {}".format(cmd))
