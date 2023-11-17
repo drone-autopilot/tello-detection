@@ -6,6 +6,8 @@ import arrow
 import command
 import threading
 import queue
+import socket
+import json
 
 #                                                                                                                                              
 #                                                                                                 ■■             ■             ■               
@@ -40,19 +42,9 @@ ARROW_X_THRESHOLD = 0 # 中央
 ARROW_Z_ERROR_RANGE = 10000 # 80000-100000
 ARROW_X_ERROR_RANGE = 50 # -50-50
 # 高さ調整のしきい値
-TOF_THRESHOLD = 120
+TOF_THRESHOLD = 100
 # 高さ調節の誤差範囲
 TOF_ERROR_RANGE = 5 # 115-125
-
-"""
-TODO
-takeoff→ok→前進開始時ToF判定開始
-矢印の位置から位置調整
-TTC検知後の処理
-"""
-
-prev_time = time.time()
-prev_time2 = time.time()
 
 frame_buffer = []
 
@@ -75,6 +67,13 @@ command.connect('127.0.0.1', 8989, 1024, debug)
 
 # TTC用パラメータの初期化
 ttc = ttc.TTC()
+
+# Status取得用
+status = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+status.connect(('127.0.0.1', 8990))
+
+# ToFセンサーの値
+tof = TOF_THRESHOLD
 
 def show_arrow_info(frame, text):
     """
@@ -173,7 +172,12 @@ def move_drone():
             continue
 
         if is_moving:
-            rc("0", "5", "0", "0")
+            if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
+                rc("0", "5", "5", "0")
+            elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
+                rc("0", "5", "-5", "0")
+            else:
+                rc("0", "5", "0", "0")
             continue
 
         time.sleep(0.1)
@@ -185,23 +189,16 @@ def calc_ttc():
     """
     ttc計算処理
     """
-    global g_frame, prev_time, frame_buffer, close_count, is_avoid, is_turn, is_exit
+    global g_frame, frame_buffer, close_count, is_avoid, is_turn, is_exit
     
     while not is_exit:
         if g_frame is None:
             continue
 
-        current_time = time.time()
-        elapsed_time = current_time - prev_time
-
-        if elapsed_time >= 0.1:  # 0.1秒ごとに処理
-
-            # TTC計算
-            ttc_value = ttc.analysis(g_frame)
-            if ttc_value is not None:
-                frame_buffer.append(ttc_value)
-
-            prev_time = current_time
+        # TTC計算
+        ttc_value = ttc.analysis(g_frame)
+        if ttc_value is not None:
+            frame_buffer.append(ttc_value)
 
         # TTCの平均を計算して警告を出す
         if len(frame_buffer) == 5:
@@ -221,6 +218,8 @@ def calc_ttc():
 
             frame_buffer = []
 
+        time.sleep(0.1)
+
 ttc_thread = threading.Thread(target=calc_ttc)
 ttc_thread.start()
 
@@ -228,45 +227,38 @@ def calc_arrow():
     """
     矢印判定処理
     """
-    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, prev_time2, frame_queue
+    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, frame_queue
 
     while not is_exit:
         if g_frame is None:
             continue
 
-        # フレーム間の経過時間を計算
-        current_time = time.time()
-        elapsed_time2 = current_time  - prev_time2
+        # 矢印判定とカメラ映像取得
+        new_frame, direction, relative, position = arrow.Arrow().analysis(g_frame)
+        if((direction is not None) & (relative is not None) & (position is not None)):
+            lr, ud, dx, dy = position
+            show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
 
-        # 矢印判定処理
-        if elapsed_time2 >= 0.1: # 0.1秒ごとに処理
-        
-            # 矢印判定とカメラ映像取得
-            new_frame, direction, relative, position = arrow.Arrow().analysis(g_frame)
-            if((direction is not None) & (relative is not None) & (position is not None)):
-                lr, ud, dx, dy = position
-                show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
+            # 矢印が近すぎる場合は後進
+            _  = "todo"
 
-                # 矢印が近すぎる場合は後進
-                _  = "todo"
+            # 一定の距離以内に近づかないと数えない
+            if(relative >= ARROW_Z_THRESHOLD):
+                if(old_direction == direction): arrow_count += 1
+                old_direction = direction
 
-                # 一定の距離以内に近づかないと数えない
-                if(relative >= ARROW_Z_THRESHOLD):
-                    if(old_direction == direction): arrow_count += 1
-                    old_direction = direction
+            # 20回連続で方向検知で方向転換
+            if((not is_avoid) & (not is_turn)):
+                if(arrow_count >= 20):
+                    is_turn = True
 
-                # 20回連続で方向検知で方向転換
-                if((not is_avoid) & (not is_turn)):
-                    if(arrow_count >= 20):
-                        is_turn = True
+        else:
+            arrow_count = 0
+            old_direction = ""
 
-            else:
-                arrow_count = 0
-                old_direction = ""
+        frame_queue.put(new_frame)
 
-            frame_queue.put(new_frame)
-
-            prev_time2 = current_time
+        time.sleep(0.1)
 
 arrow_thread = threading.Thread(target=calc_arrow)
 arrow_thread.start()
@@ -299,6 +291,28 @@ def camera_thread():
 video_thread = threading.Thread(target=camera_thread)
 video_thread.start()
 
+def get_tof():
+    """
+    ToFセンサーの値を取得する
+    """
+    global is_exit, status, tof
+
+    while not is_exit:
+        try:
+            data = status.recv(1024)
+            data_str = data.decode("utf-8")
+            decoder = json.JSONDecoder()
+            parsed, _ = decoder.raw_decode(data_str)
+            tof = parsed["time_of_flight"]
+
+        except json.JSONDecodeError as e:
+            print(f"JSON Decode Error: {e}")
+        
+        time.sleep(0.05) # 0.05秒ごとに処理
+
+tof_thread = threading.Thread(target=get_tof)
+tof_thread.start()
+
 while True:
     frame = frame_queue.get()
     cv2.imshow("Tello-Detection", frame)
@@ -311,3 +325,4 @@ arrow_thread.join()
 ttc_thread.join()
 dorone_thread.join()
 video_thread.join()
+tof_thread.join()
