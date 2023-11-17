@@ -53,7 +53,10 @@ is_avoid = False
 
 arrow_count = 0
 old_direction = ""
+arrow_z = 0
+arrow_x = 0
 is_turn = False
+turn_approved = False
 
 is_moving = False
 is_exit = False
@@ -136,7 +139,7 @@ def move_drone():
     """
     ドローンの制御関数
     """
-    global is_moving, is_turn, old_direction, is_avoid, is_exit
+    global is_moving, is_turn, old_direction, is_avoid, is_exit, turn_approved, arrow_x, arrow_z
 
     while True:
         if is_exit:
@@ -151,19 +154,36 @@ def move_drone():
             continue
 
         if is_moving & is_turn:
-            if(old_direction == "Left"):
-                rc("0", "0", "0", "0")
-                ccw("90")
-                time.sleep(2) # 2秒待機
-                is_turn = False
-                continue
+            if turn_approved:
+                if(old_direction == "Left"):
+                    rc("0", "0", "0", "0")
+                    ccw("90")
+                    time.sleep(2) # 2秒待機
+                    is_turn = False
+                    turn_approved = False
+                    continue
 
-            elif(old_direction == "Right"):
-                rc("0", "0", "0", "0")
-                cw("90")
-                time.sleep(2) # 2秒待機
-                is_turn = False
-                continue
+                elif(old_direction == "Right"):
+                    rc("0", "0", "0", "0")
+                    cw("90")
+                    time.sleep(2) # 2秒待機
+                    is_turn = False
+                    turn_approved = False
+                    continue
+            
+            else:
+                if(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
+                    rc("0", "5", "0", "0")
+                elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
+                    rc("0", "-5", "0", "0")
+                elif(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
+                    rc("-5", "0", "0", "0")
+                elif(arrow_x > ARROW_X_THRESHOLD + ARROW_X_ERROR_RANGE):
+                    rc("5", "0", "0", "0")
+                else:
+                    rc("0", "0", "0", "0")
+                    turn_approved = True
+            continue
 
         if is_moving & is_avoid:
             rc("0", "0", "0", "0")
@@ -227,7 +247,7 @@ def calc_arrow():
     """
     矢印判定処理
     """
-    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, frame_queue
+    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, frame_queue, arrow_z, arrow_x
 
     while not is_exit:
         if g_frame is None:
@@ -239,13 +259,14 @@ def calc_arrow():
             lr, ud, dx, dy = position
             show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
 
+            arrow_x = dx
+            arrow_z = relative
+
             # 矢印が近すぎる場合は後進
             _  = "todo"
 
-            # 一定の距離以内に近づかないと数えない
-            if(relative >= ARROW_Z_THRESHOLD):
-                if(old_direction == direction): arrow_count += 1
-                old_direction = direction
+            if(old_direction == direction): arrow_count += 1
+            old_direction = direction
 
             # 20回連続で方向検知で方向転換
             if((not is_avoid) & (not is_turn)):
