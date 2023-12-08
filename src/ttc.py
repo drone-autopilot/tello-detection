@@ -5,10 +5,10 @@ class TTC:
     def __init__(self):
 
         # カメラの内部パラメータ（Telloカメラの720p設定を480x270に調整）
-        self.fx = 916.0 * (480/720)  
-        self.fy = 914.0 * (270/480)  
-        self.cx = 319.5 * (480/720) 
-        self.cy = 239.5 * (270/480)
+        self.fx = 916.0
+        self.fy = 916.0
+        self.cx = 640.0  # 1280の半分
+        self.cy = 360.0  # 720の半分
 
         # カメラ行列
         self.camera_matrix = np.array([[self.fx, 0, self.cx],

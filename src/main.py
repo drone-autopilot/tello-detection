@@ -33,18 +33,27 @@ import json
 #                                                                                              ■             ■          ■■■■■■                 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""";debug = True;""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
+# todo 衝突判定+TOF制限を超えない高さ調節
+
 # TTCの警告しきい値
 TTC_THRESHOLD = 0.075
 # 矢印判定のしきい値
-ARROW_Z_THRESHOLD = 90000 # 約35cm以上
+ARROW_Z_THRESHOLD = 80000 # 約35cm以上
 ARROW_X_THRESHOLD = 0 # 中央
 # 矢印前後位置調整用誤差範囲
-ARROW_Z_ERROR_RANGE = 10000 # 80000-100000
+ARROW_Z_ERROR_RANGE = 20000 # 80000-100000
 ARROW_X_ERROR_RANGE = 50 # -50-50
 # 高さ調整のしきい値
 TOF_THRESHOLD = 100
 # 高さ調節の誤差範囲
-TOF_ERROR_RANGE = 5 # 115-125
+TOF_ERROR_RANGE = 0 # 115-125
+
+# 速度
+X_SPEED = 5
+Z_SPEED = 8
+TOF_SPEED = 10
+
+ready = False
 
 frame_buffer = []
 
@@ -119,7 +128,7 @@ def rc(erlon: str, elevator: str, srotol: str, lador: str):
     srotol: 正で上昇、負で下降
     lador: 正で右旋回、負で左旋回
     """
-    command.send(f"rc {erlon} {elevator} {srotol} {lador}")
+    command.send(f"rc {erlon} {elevator} {srotol} {lador}", True)
 
 def cw(degree: str):
     """
@@ -142,6 +151,9 @@ def move_drone():
     global is_moving, is_turn, old_direction, is_avoid, is_exit, turn_approved, arrow_x, arrow_z
 
     while True:
+        if not ready:
+            continue
+
         if is_exit:
             rc("0", "0", "0", "0")
             land()
@@ -172,15 +184,44 @@ def move_drone():
                     continue
             
             else:
-                if(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
-                    rc("0", "5", "0", "0")
-                elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
-                    rc("0", "-5", "0", "0")
-                elif(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
-                    rc("-5", "0", "0", "0")
+                if(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
+                    print(f"左へ {arrow_x}")
+                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
+                        rc(f"{-X_SPEED}", "0", f"{TOF_SPEED}", "0")
+                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
+                        rc(f"{-X_SPEED}", "0", f"{-TOF_SPEED}", "0")
+                    else:
+                        rc(f"{-X_SPEED}", "0", "0", "0")
+                    
                 elif(arrow_x > ARROW_X_THRESHOLD + ARROW_X_ERROR_RANGE):
-                    rc("5", "0", "0", "0")
+                    print(f"右へ {arrow_x}")
+                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
+                        rc(f"{X_SPEED}", "0", f"{TOF_SPEED}", "0")
+                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
+                        rc(f"{X_SPEED}", "0", f"{-TOF_SPEED}", "0")
+                    else:
+                        rc(f"{X_SPEED}", "0", "0", "0")
+
+                elif(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
+                    print(f"前へ {arrow_z}")
+                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
+                        rc("0", f"{Z_SPEED}", f"{TOF_SPEED}", "0")
+                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
+                        rc("0", f"{Z_SPEED}", f"{-TOF_SPEED}", "0")
+                    else:
+                        rc("0", f"{Z_SPEED}", "0", "0")
+
+                elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
+                    print(f"後ろへ {arrow_z}")
+                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
+                        rc("0", f"{-Z_SPEED}", f"{TOF_SPEED}", "0")
+                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
+                        rc("0", f"{-Z_SPEED}", f"{-TOF_SPEED}", "0")
+                    else:
+                        rc("0", f"{-Z_SPEED}", "0", "0")
+                    
                 else:
+                    print(f"OK")
                     rc("0", "0", "0", "0")
                     turn_approved = True
             continue
@@ -193,11 +234,12 @@ def move_drone():
 
         if is_moving:
             if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
-                rc("0", "5", "5", "0")
+                rc("0", f"{Z_SPEED}", f"{TOF_SPEED}", "0")
             elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
-                rc("0", "5", "-5", "0")
+                rc("0", f"{Z_SPEED}", f"{-TOF_SPEED}", "0")
             else:
-                rc("0", "5", "0", "0")
+                rc("0", f"{Z_SPEED}", "0", "0")
+            time.sleep(0.5) # 0.5待機
             continue
 
         time.sleep(0.1)
@@ -223,10 +265,11 @@ def calc_ttc():
         # TTCの平均を計算して警告を出す
         if len(frame_buffer) == 5:
             average_ttc = np.mean(frame_buffer)
-            print(f"TTC: {average_ttc}")
+            #print(f"TTC: {average_ttc}")
 
             # 至近距離判定カウント
             if average_ttc < TTC_THRESHOLD:
+                print(f"TTC: {average_ttc}")
                 print("TTC: Object is very close.")
                 close_count += 1
                 if((not is_avoid) & (not is_turn)):
@@ -240,8 +283,8 @@ def calc_ttc():
 
         time.sleep(0.1)
 
-ttc_thread = threading.Thread(target=calc_ttc)
-ttc_thread.start()
+# ttc_thread = threading.Thread(target=calc_ttc)
+# ttc_thread.start()
 
 def calc_arrow():
     """
@@ -262,18 +305,18 @@ def calc_arrow():
             arrow_x = dx
             arrow_z = relative
 
-            # 矢印が近すぎる場合は後進
-            _  = "todo"
-
             if(old_direction == direction): arrow_count += 1
             old_direction = direction
 
-            # 20回連続で方向検知で方向転換
-            if((not is_avoid) & (not is_turn)):
-                if(arrow_count >= 20):
+            # 5回連続で方向検知で方向転換
+            if(not is_avoid):
+                if(arrow_count >= 5):
                     is_turn = True
+                else:
+                    is_turn = False
 
         else:
+            is_turn = False
             arrow_count = 0
             old_direction = ""
 
@@ -292,8 +335,8 @@ def camera_thread():
 
     # カメラストリームのセットアップ
     cap = cv2.VideoCapture('udp://@0.0.0.0:11113')
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 270)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     while True:
         if is_exit:
             break
@@ -324,7 +367,11 @@ def get_tof():
             data_str = data.decode("utf-8")
             decoder = json.JSONDecoder()
             parsed, _ = decoder.raw_decode(data_str)
-            tof = parsed["time_of_flight"]
+            if isinstance(parsed, dict) and "time_of_flight" in parsed:
+                tof = int(parsed["time_of_flight"])
+            else:
+                print("Received data is not in expected format:", parsed)
+
 
         except json.JSONDecodeError as e:
             print(f"JSON Decode Error: {e}")
@@ -337,13 +384,14 @@ tof_thread.start()
 while True:
     frame = frame_queue.get()
     cv2.imshow("Tello-Detection", frame)
+    if not ready: ready = True
     if cv2.waitKey(1) & 0xFF == 27:
         is_exit = True
         break
 
 cv2.destroyAllWindows()
 arrow_thread.join()
-ttc_thread.join()
+# ttc_thread.join()
 dorone_thread.join()
 video_thread.join()
 tof_thread.join()
