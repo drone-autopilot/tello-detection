@@ -11,13 +11,13 @@ class Command:
     def send(self, cmd: str, skip: bool = False):
         if self.debug:
             #print(f"<---{cmd}--->")
-            self.socket.send("command".encode('utf-8'))
+            self.socket.send("commandA".encode('utf-8'))
             if(self.buf_size is not None):
                 response = self.socket.recv(self.buf_size)
                 #print("[*]Received a response : {}".format(response))
         else:
-            self.socket.send(cmd.encode('utf-8'))
-            print("[*]Sended a command : {}".format(cmd))
+            self.socket.send(f"{cmd}A".encode('utf-8'))
+            print(f"[*]Sended a command : {cmd}")
             if(not skip):
                 if(self.buf_size is not None):
                     response = self.socket.recv(self.buf_size)
