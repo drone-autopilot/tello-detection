@@ -22,3 +22,7 @@ class Command:
                 if(self.buf_size is not None):
                     response = self.socket.recv(self.buf_size)
                     print("[*]Received a response : {}".format(response))
+                    if(response == b"ok"):
+                        return True
+                    else:
+                        return False

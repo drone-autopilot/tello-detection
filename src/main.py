@@ -40,17 +40,20 @@ TTC_THRESHOLD = 0.075
 # 矢印判定のしきい値
 ARROW_Z_THRESHOLD = 80000 # 約35cm以上
 ARROW_X_THRESHOLD = 0 # 中央
+ARROW_Y_THRESHOLD = 0
 # 矢印前後位置調整用誤差範囲
 ARROW_Z_ERROR_RANGE = 20000 # 80000-100000
 ARROW_X_ERROR_RANGE = 50 # -50-50
+ARROW_Y_ERROR_RANGE = 130
 # 高さ調整のしきい値
 TOF_THRESHOLD = 100
 # 高さ調節の誤差範囲
-TOF_ERROR_RANGE = 0 # 115-125
+TOF_ERROR_RANGE = 5 # 115-125
 
 # 速度
 X_SPEED = 5
-Z_SPEED = 8
+Z_SPEED = 5
+Y_SPEED = 10
 TOF_SPEED = 10
 
 ready = False
@@ -64,6 +67,7 @@ arrow_count = 0
 old_direction = ""
 arrow_z = 0
 arrow_x = 0
+arrow_y = 0
 is_turn = False
 turn_approved = False
 
@@ -120,7 +124,7 @@ def land():
     """
     command.send("land")
 
-def rc(erlon: str, elevator: str, srotol: str, lador: str):
+def rc(erlon: str, elevator: str, srotol: str, lador: str, skip: bool = True):
     """
     rcコマンドを送信
     erlon: 正で右移動、負で左移動
@@ -128,27 +132,41 @@ def rc(erlon: str, elevator: str, srotol: str, lador: str):
     srotol: 正で上昇、負で下降
     lador: 正で右旋回、負で左旋回
     """
-    command.send(f"rc {erlon} {elevator} {srotol} {lador}", True)
+    if(skip == False):
+        while(True):
+            result = command.send(f"rc {erlon} {elevator} {srotol} {lador}")
+            if(result): break
+            time.sleep(0.1)
+    else:
+        command.send(f"rc {erlon} {elevator} {srotol} {lador}", True)
 
 def cw(degree: str):
     """
     cwコマンドを送信
     時計回りに指定した角度分旋回する
     """
-    command.send(f"cw {degree}")
+    while(True):
+        rc("0", "0", "0", "0")
+        result = command.send(f"cw {degree}")
+        if(result): break
+        time.sleep(0.1)
 
 def ccw(degree: str):
     """
     ccwコマンドを送信
     反時計回りに指定した角度分旋回する
     """
-    command.send(f"ccw {degree}")
+    while(True):
+        rc("0", "0", "0", "0")
+        result = command.send(f"ccw {degree}")
+        if(result): break
+        time.sleep(0.1)
 
 def move_drone():
     """
     ドローンの制御関数
     """
-    global is_moving, is_turn, old_direction, is_avoid, is_exit, turn_approved, arrow_x, arrow_z
+    global is_moving, is_turn, old_direction, is_avoid, is_exit, turn_approved, arrow_x, arrow_z, arrow_y
 
     while True:
         if not ready:
@@ -162,13 +180,12 @@ def move_drone():
         if not is_moving:
             is_moving = True
             takeoff()
-            time.sleep(2) # 2秒待機
+            time.sleep(5) # 2秒待機
             continue
 
         if is_moving & is_turn:
             if turn_approved:
                 if(old_direction == "Left"):
-                    rc("0", "0", "0", "0")
                     ccw("90")
                     time.sleep(2) # 2秒待機
                     is_turn = False
@@ -176,7 +193,6 @@ def move_drone():
                     continue
 
                 elif(old_direction == "Right"):
-                    rc("0", "0", "0", "0")
                     cw("90")
                     time.sleep(2) # 2秒待機
                     is_turn = False
@@ -184,46 +200,36 @@ def move_drone():
                     continue
             
             else:
-                if(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
+                if(arrow_y < ARROW_Y_THRESHOLD - ARROW_Y_ERROR_RANGE):
+                    print(f"上へ {arrow_y}")
+                    rc("0", "0", f"{Y_SPEED}", "0")
+
+                elif(arrow_y > ARROW_Y_THRESHOLD + ARROW_Y_ERROR_RANGE):
+                    print(f"下へ {arrow_y}")
+                    rc("0", "0", f"{-Y_SPEED}", "0")
+
+                elif(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
                     print(f"左へ {arrow_x}")
-                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
-                        rc(f"{-X_SPEED}", "0", f"{TOF_SPEED}", "0")
-                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
-                        rc(f"{-X_SPEED}", "0", f"{-TOF_SPEED}", "0")
-                    else:
-                        rc(f"{-X_SPEED}", "0", "0", "0")
+                    rc(f"{-X_SPEED}", "0", "0", "0")
                     
                 elif(arrow_x > ARROW_X_THRESHOLD + ARROW_X_ERROR_RANGE):
                     print(f"右へ {arrow_x}")
-                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
-                        rc(f"{X_SPEED}", "0", f"{TOF_SPEED}", "0")
-                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
-                        rc(f"{X_SPEED}", "0", f"{-TOF_SPEED}", "0")
-                    else:
-                        rc(f"{X_SPEED}", "0", "0", "0")
+                    rc(f"{X_SPEED}", "0", "0", "0")
 
                 elif(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
                     print(f"前へ {arrow_z}")
-                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
-                        rc("0", f"{Z_SPEED}", f"{TOF_SPEED}", "0")
-                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
-                        rc("0", f"{Z_SPEED}", f"{-TOF_SPEED}", "0")
-                    else:
-                        rc("0", f"{Z_SPEED}", "0", "0")
+                    rc("0", f"{Z_SPEED}", "0", "0")
 
                 elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
                     print(f"後ろへ {arrow_z}")
-                    if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
-                        rc("0", f"{-Z_SPEED}", f"{TOF_SPEED}", "0")
-                    elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
-                        rc("0", f"{-Z_SPEED}", f"{-TOF_SPEED}", "0")
-                    else:
-                        rc("0", f"{-Z_SPEED}", "0", "0")
+                    rc("0", f"{-Z_SPEED}", "0", "0")
                     
                 else:
                     print(f"OK")
                     rc("0", "0", "0", "0")
                     turn_approved = True
+
+                time.sleep(0.5)
             continue
 
         if is_moving & is_avoid:
@@ -234,9 +240,9 @@ def move_drone():
 
         if is_moving:
             if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
-                rc("0", f"{Z_SPEED}", f"{TOF_SPEED}", "0")
+                rc("0", "0", f"{TOF_SPEED}", "0")
             elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
-                rc("0", f"{Z_SPEED}", f"{-TOF_SPEED}", "0")
+                rc("0", "0", f"{-TOF_SPEED}", "0")
             else:
                 rc("0", f"{Z_SPEED}", "0", "0")
             time.sleep(0.5) # 0.5待機
@@ -290,7 +296,7 @@ def calc_arrow():
     """
     矢印判定処理
     """
-    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, frame_queue, arrow_z, arrow_x
+    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, frame_queue, arrow_z, arrow_x, arrow_y
 
     while not is_exit:
         if g_frame is None:
@@ -303,6 +309,7 @@ def calc_arrow():
             show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
 
             arrow_x = dx
+            arrow_y = dy
             arrow_z = relative
 
             if(old_direction == direction): arrow_count += 1

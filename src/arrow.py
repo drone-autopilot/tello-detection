@@ -106,9 +106,9 @@ class Arrow:
             angle_degree = np.degrees(angle)
 
             inner_angle = 180 - angle_degree
-            if (55 <= inner_angle) and (inner_angle <= 68) :
+            if (40 <= inner_angle) and (inner_angle <= 74) :
                 acute_angles += 1
-            elif (83 <= inner_angle) and (inner_angle <= 99):
+            elif (75 <= inner_angle) and (inner_angle <= 110):
                 obtuse_angles += 1
 
         return acute_angles == 3 and obtuse_angles == 4
@@ -138,7 +138,7 @@ class Arrow:
         contours, hierarchy = cv2.findContours(dilated_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
 
         # 最大面積の輪郭を探します
-        contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)[:3]  # 最大面積の輪郭を3つまで取得
+        contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)[:12]  # 最大面積の輪郭を12つまで取得
 
         max_contour = None
         max_approx = None  # 近似輪郭も保存
