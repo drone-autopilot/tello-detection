@@ -52,7 +52,7 @@ TOF_ERROR_RANGE = 5 # 115-125
 
 # 速度
 X_SPEED = 5
-Z_SPEED = 5
+Z_SPEED = 7
 Y_SPEED = 10
 TOF_SPEED = 10
 
@@ -147,6 +147,7 @@ def cw(degree: str):
     """
     while(True):
         rc("0", "0", "0", "0")
+        time.sleep(0.5)
         result = command.send(f"cw {degree}")
         if(result): break
         time.sleep(0.1)
@@ -158,6 +159,7 @@ def ccw(degree: str):
     """
     while(True):
         rc("0", "0", "0", "0")
+        time.sleep(0.5)
         result = command.send(f"ccw {degree}")
         if(result): break
         time.sleep(0.1)
@@ -200,21 +202,30 @@ def move_drone():
                     continue
             
             else:
+                deltas = {
+                    "y_diff": abs(arrow_y) - ARROW_Y_THRESHOLD,
+                    "x_diff": abs(arrow_x) - ARROW_X_THRESHOLD
+                }
+                # 一番ズレの大きい方向を優先して移動する(距離は除外)
                 if(arrow_y < ARROW_Y_THRESHOLD - ARROW_Y_ERROR_RANGE):
-                    print(f"上へ {arrow_y}")
-                    rc("0", "0", f"{Y_SPEED}", "0")
+                    if(max(deltas, key=deltas.get) == "y_diff"):
+                        print(f"上へ {arrow_y}")
+                        rc("0", "0", f"{Y_SPEED}", "0")
 
                 elif(arrow_y > ARROW_Y_THRESHOLD + ARROW_Y_ERROR_RANGE):
-                    print(f"下へ {arrow_y}")
-                    rc("0", "0", f"{-Y_SPEED}", "0")
+                    if(max(deltas, key=deltas.get) == "y_diff"):
+                        print(f"下へ {arrow_y}")
+                        rc("0", "0", f"{-Y_SPEED}", "0")
 
-                elif(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
-                    print(f"左へ {arrow_x}")
-                    rc(f"{-X_SPEED}", "0", "0", "0")
+                if(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
+                    if(max(deltas, key=deltas.get) == "x_diff"):
+                        print(f"左へ {arrow_x}")
+                        rc(f"{-X_SPEED}", "0", "0", "0")
                     
                 elif(arrow_x > ARROW_X_THRESHOLD + ARROW_X_ERROR_RANGE):
-                    print(f"右へ {arrow_x}")
-                    rc(f"{X_SPEED}", "0", "0", "0")
+                    if(max(deltas, key=deltas.get) == "x_diff"):
+                        print(f"右へ {arrow_x}")
+                        rc(f"{X_SPEED}", "0", "0", "0")
 
                 elif(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
                     print(f"前へ {arrow_z}")
