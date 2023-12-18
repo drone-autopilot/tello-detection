@@ -1,3 +1,4 @@
+from PIL import Image, ImageDraw, ImageFont
 import cv2
 import numpy as np
 import time
@@ -77,6 +78,8 @@ is_exit = False
 frame_queue = queue.Queue()
 g_frame = None
 
+drone_info = "待機中"
+
 # TCPクライアントのセットアップ
 command = command.Command()
 command.connect('127.0.0.1', 8989, 1024, debug)
@@ -111,6 +114,43 @@ def show_arrow_info(frame, text):
 
     # フレームにテキストを描画
     cv2.putText(frame, text, (text_offset_x, text_offset_y), font, font_scale, (0, 0, 0), thickness)
+
+def show_drone_info(frame):
+    """
+    cv2の画面内にドローンの状態や命令を表示します
+    """
+    global drone_info
+
+    # PILで日本語対応フォントを設定
+    font_path = "C:\Windows\Fonts\meiryo.ttc"  # 日本語フォントのパスを設定
+    font_size = 30
+    font = ImageFont.truetype(font_path, font_size)
+
+    # OpenCV画像をPIL画像に変換
+    pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_img)
+
+    # テキストの位置を設定
+    text_offset_x = 10
+    text_offset_y = 670
+
+    # 縁取り文字の設定
+    text_color = (255, 255, 255)  # 白色
+    outline_color = (0, 0, 0)  # 黒色
+    thickness = 2
+
+    # 縁取り文字を描画
+    for x in range(-thickness, thickness+1):
+        for y in range(-thickness, thickness+1):
+            draw.text((text_offset_x+x, text_offset_y+y), drone_info, font=font, fill=outline_color)
+
+    # 通常のテキストを描画
+    draw.text((text_offset_x, text_offset_y), drone_info, font=font, fill=text_color)
+
+    # PIL画像をOpenCV画像に変換
+    frame = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+    return frame
 
 def takeoff():
     """
@@ -168,18 +208,20 @@ def move_drone():
     """
     ドローンの制御関数
     """
-    global is_moving, is_turn, old_direction, is_avoid, is_exit, turn_approved, arrow_x, arrow_z, arrow_y
+    global is_moving, is_turn, old_direction, is_avoid, is_exit, turn_approved, arrow_x, arrow_z, arrow_y, drone_info
 
     while True:
         if not ready:
             continue
 
         if is_exit:
+            drone_info = "停止"
             rc("0", "0", "0", "0")
             land()
             break
 
         if not is_moving:
+            drone_info = "離陸する"
             is_moving = True
             takeoff()
             time.sleep(5) # 2秒待機
@@ -188,6 +230,7 @@ def move_drone():
         if is_moving & is_turn:
             if turn_approved:
                 if(old_direction == "Left"):
+                    drone_info = "左へ回転"
                     ccw("90")
                     time.sleep(2) # 2秒待機
                     is_turn = False
@@ -195,6 +238,7 @@ def move_drone():
                     continue
 
                 elif(old_direction == "Right"):
+                    drone_info = "右へ回転"
                     cw("90")
                     time.sleep(2) # 2秒待機
                     is_turn = False
@@ -209,33 +253,40 @@ def move_drone():
                 # 一番ズレの大きい方向を優先して移動する(距離は除外)
                 if(arrow_y < ARROW_Y_THRESHOLD - ARROW_Y_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "y_diff"):
+                        drone_info = "上昇する"
                         print(f"上へ {arrow_y}")
                         rc("0", "0", f"{Y_SPEED}", "0")
 
                 elif(arrow_y > ARROW_Y_THRESHOLD + ARROW_Y_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "y_diff"):
+                        drone_info = "下降する"
                         print(f"下へ {arrow_y}")
                         rc("0", "0", f"{-Y_SPEED}", "0")
 
                 if(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "x_diff"):
+                        drone_info = "左へ移動"
                         print(f"左へ {arrow_x}")
                         rc(f"{-X_SPEED}", "0", "0", "0")
                     
                 elif(arrow_x > ARROW_X_THRESHOLD + ARROW_X_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "x_diff"):
+                        drone_info = "右へ移動"
                         print(f"右へ {arrow_x}")
                         rc(f"{X_SPEED}", "0", "0", "0")
 
                 elif(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
+                    drone_info = "前進する"
                     print(f"前へ {arrow_z}")
                     rc("0", f"{Z_SPEED}", "0", "0")
 
                 elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
+                    drone_info = "後退する"
                     print(f"後ろへ {arrow_z}")
                     rc("0", f"{-Z_SPEED}", "0", "0")
                     
                 else:
+                    drone_info = "回転位置に到着"
                     print(f"OK")
                     rc("0", "0", "0", "0")
                     turn_approved = True
@@ -244,6 +295,7 @@ def move_drone():
             continue
 
         if is_moving & is_avoid:
+            drone_info = "停止"
             rc("0", "0", "0", "0")
             time.sleep(5) # 5秒待機
             is_avoid = False
@@ -251,10 +303,13 @@ def move_drone():
 
         if is_moving:
             if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
+                drone_info = "上昇する"
                 rc("0", "0", f"{TOF_SPEED}", "0")
             elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
+                drone_info = "下降する"
                 rc("0", "0", f"{-TOF_SPEED}", "0")
             else:
+                drone_info = "前進する"
                 rc("0", f"{Z_SPEED}", "0", "0")
             time.sleep(0.5) # 0.5待機
             continue
@@ -400,7 +455,7 @@ tof_thread = threading.Thread(target=get_tof)
 tof_thread.start()
 
 while True:
-    frame = frame_queue.get()
+    frame = show_drone_info(frame_queue.get())
     cv2.imshow("Tello-Detection", frame)
     if not ready: ready = True
     if cv2.waitKey(1) & 0xFF == 27:
