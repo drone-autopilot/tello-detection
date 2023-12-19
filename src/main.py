@@ -52,10 +52,13 @@ TOF_THRESHOLD = 100
 TOF_ERROR_RANGE = 5 # 115-125
 
 # 速度
-X_SPEED = 5
-Z_SPEED = 7
-Y_SPEED = 10
-TOF_SPEED = 10
+X_LOW_SPEED = 5
+X_HIGH_SPEED = 10
+Z_LOW_SPEED = 7
+Z_HIGH_SPEED = 12
+Y_LOW_SPEED = 10
+Y_HIGH_SPEED = 13
+TOF_SPEED = 13
 
 ready = False
 
@@ -255,35 +258,50 @@ def move_drone():
                     if(max(deltas, key=deltas.get) == "y_diff"):
                         drone_info = "上昇する"
                         print(f"上へ {arrow_y}")
-                        rc("0", "0", f"{Y_SPEED}", "0")
+                        if(arrow_z < 30000):
+                            rc("0", "0", f"{Y_HIGH_SPEED}", "0")
+                        else:
+                            rc("0", "0", f"{Y_LOW_SPEED}", "0")
 
                 elif(arrow_y > ARROW_Y_THRESHOLD + ARROW_Y_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "y_diff"):
                         drone_info = "下降する"
                         print(f"下へ {arrow_y}")
-                        rc("0", "0", f"{-Y_SPEED}", "0")
+                        if(arrow_z < 30000):
+                            rc("0", "0", f"{-Y_HIGH_SPEED}", "0")
+                        else:
+                            rc("0", "0", f"{-Y_LOW_SPEED}", "0")
 
                 if(arrow_x < ARROW_X_THRESHOLD - ARROW_X_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "x_diff"):
                         drone_info = "左へ移動"
                         print(f"左へ {arrow_x}")
-                        rc(f"{-X_SPEED}", "0", "0", "0")
+                        if(arrow_z < 30000):
+                            rc(f"{-X_HIGH_SPEED}", "0", "0", "0")
+                        else:
+                            rc(f"{-X_LOW_SPEED}", "0", "0", "0")
                     
                 elif(arrow_x > ARROW_X_THRESHOLD + ARROW_X_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "x_diff"):
                         drone_info = "右へ移動"
                         print(f"右へ {arrow_x}")
-                        rc(f"{X_SPEED}", "0", "0", "0")
+                        if(arrow_z < 30000):
+                            rc(f"{X_HIGH_SPEED}", "0", "0", "0")
+                        else:
+                            rc(f"{X_LOW_SPEED}", "0", "0", "0")
 
                 elif(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
                     drone_info = "前進する"
                     print(f"前へ {arrow_z}")
-                    rc("0", f"{Z_SPEED}", "0", "0")
+                    if(arrow_z < 30000):
+                        rc("0", f"{Z_HIGH_SPEED}", "0", "0")
+                    else:
+                        rc("0", f"{Z_LOW_SPEED}", "0", "0")
 
                 elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
                     drone_info = "後退する"
                     print(f"後ろへ {arrow_z}")
-                    rc("0", f"{-Z_SPEED}", "0", "0")
+                    rc("0", f"{-Z_HIGH_SPEED}", "0", "0")
                     
                 else:
                     drone_info = "回転位置に到着"
@@ -310,7 +328,7 @@ def move_drone():
                 rc("0", "0", f"{-TOF_SPEED}", "0")
             else:
                 drone_info = "前進する"
-                rc("0", f"{Z_SPEED}", "0", "0")
+                rc("0", f"{Z_HIGH_SPEED}", "0", "0")
             time.sleep(0.5) # 0.5待機
             continue
 
