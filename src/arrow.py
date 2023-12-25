@@ -113,6 +113,23 @@ class Arrow:
 
         return acute_angles == 3 and obtuse_angles == 4
     
+    def check_arrow_perspective(self, approx):
+        """
+        approx配列から矢印の傾き（perspective）をチェック
+        """
+        if approx is None or len(approx) < 4:
+            return None
+
+        # 四角形の辺の長さを計算
+        # approx[2] から approx[5] までの頂点を使用
+        edge_lengths = [np.linalg.norm(approx[i][0] - approx[(i+1)%4 + 2][0]) for i in range(2, 6)]
+
+        # 辺の長さの比較
+        length_ratio1 = edge_lengths[0] / edge_lengths[2]  # 上辺と下辺
+        length_ratio2 = edge_lengths[1] / edge_lengths[3]  # 左辺と右辺
+
+        return [length_ratio1, length_ratio2]
+    
     def analysis(self, frame):
         """
         矢印検知
@@ -166,6 +183,7 @@ class Arrow:
         arrow_direction = None
         relative_size = None
         position_info = None
+        perspective = None
 
         # n_gon = len(approx)
         # if n_gon == 7:
@@ -173,6 +191,9 @@ class Arrow:
             #for p in max_contour:
                 #cv2.circle(frame, p[0], 4, (0, 255, 0), -1)
             cv2.drawContours(frame, max_contour, -1, (0, 255, 0), 3)
+
+            # 矢印の歪み計算
+            perspective = self.check_arrow_perspective(max_approx)
 
             if True is True:
                 # モーメントを計算
@@ -182,7 +203,7 @@ class Arrow:
                     center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
                 else:
                     # 重心を見つけることができない場合は、エラーを返すか、デフォルト値を設定
-                    return frame, None, None, None
+                    return frame, None, None, None, None
                 
                 # 画像のサイズを取得
                 frame_height, frame_width = frame.shape[:2]
@@ -198,4 +219,4 @@ class Arrow:
                 x_position, y_position, delta_x, delta_y = self.determine_arrow_position(center, frame_width, frame_height)
                 position_info = (x_position, y_position, delta_x, delta_y)
 
-        return frame, arrow_direction, relative_size, position_info
+        return frame, arrow_direction, relative_size, position_info, perspective

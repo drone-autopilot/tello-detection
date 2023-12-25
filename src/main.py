@@ -2,7 +2,6 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import numpy as np
 import time
-import ttc
 import arrow
 import command
 import threading
@@ -34,12 +33,8 @@ import json
 #                                                                                              ■             ■          ■■■■■■                 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""";debug = True;""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-# todo 衝突判定+TOF制限を超えない高さ調節
-
-# TTCの警告しきい値
-TTC_THRESHOLD = 0.075
 # 矢印判定のしきい値
-ARROW_Z_THRESHOLD = 80000 # 約35cm以上
+ARROW_Z_THRESHOLD = 80000
 ARROW_X_THRESHOLD = 0 # 中央
 ARROW_Y_THRESHOLD = 0
 # 矢印前後位置調整用誤差範囲
@@ -49,29 +44,28 @@ ARROW_Y_ERROR_RANGE = 130
 # 高さ調整のしきい値
 TOF_THRESHOLD = 100
 # 高さ調節の誤差範囲
-TOF_ERROR_RANGE = 5 # 115-125
+TOF_ERROR_RANGE = 5 # 95-105
 
 # 速度
 X_LOW_SPEED = 5
 X_HIGH_SPEED = 10
 Z_LOW_SPEED = 7
-Z_HIGH_SPEED = 12
+Z_HIGH_SPEED = 15
 Y_LOW_SPEED = 10
 Y_HIGH_SPEED = 13
 TOF_SPEED = 13
+TURN_SPEED = 10
 
 ready = False
 
 frame_buffer = []
-
-close_count = 0
-is_avoid = False
 
 arrow_count = 0
 old_direction = ""
 arrow_z = 0
 arrow_x = 0
 arrow_y = 0
+arrow_pers = [0,0]
 is_turn = False
 turn_approved = False
 
@@ -86,9 +80,6 @@ drone_info = "待機中"
 # TCPクライアントのセットアップ
 command = command.Command()
 command.connect('127.0.0.1', 8989, 1024, debug)
-
-# TTC用パラメータの初期化
-ttc = ttc.TTC()
 
 # Status取得用
 status = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -211,7 +202,7 @@ def move_drone():
     """
     ドローンの制御関数
     """
-    global is_moving, is_turn, old_direction, is_avoid, is_exit, turn_approved, arrow_x, arrow_z, arrow_y, drone_info
+    global is_moving, is_turn, old_direction, is_exit, turn_approved, arrow_x, arrow_z, arrow_y, drone_info
 
     while True:
         if not ready:
@@ -304,19 +295,64 @@ def move_drone():
                     rc("0", f"{-Z_HIGH_SPEED}", "0", "0")
                     
                 else:
+                    # 矢印の歪みを確認　気休め程度の角度修正
+                    if(old_direction == "Left"):
+                        # 左向き矢印：(1.0~1.1 && 0.8~2.0)以内に 0.64未満3.0以上は反時計回り
+                        if(arrow_pers[1] >= 0.8 and arrow_pers[1] < 2.0):
+                            if(arrow_pers[0] < 1.0):
+                                drone_info = "右旋回"
+                                rc("0", "0", "0", f"{TURN_SPEED}")
+                                time.sleep(0.5)
+                                continue
+                            elif(arrow_pers[0] >= 1.1):
+                                drone_info = "左旋回"
+                                rc("0", "0", "0", f"{-TURN_SPEED}")
+                                time.sleep(0.5)
+                                continue
+                        elif(arrow_pers[1] >= 3.0):
+                            if(arrow_pers[0] < 0.64):
+                                drone_info = "左旋回"
+                                rc("0", "0", "0", f"{-TURN_SPEED}")
+                                time.sleep(0.5)
+                                continue
+
+                    elif(old_direction == "Right"):
+                        # 右向き矢印：(1.0~1.1 && 0.8~2.0)以内に 0.63以上0.4未満は時計回り
+                        if(arrow_pers[1] >= 0.8 and arrow_pers[1] < 2.0):
+                            if(arrow_pers[0] < 1.0):
+                                drone_info = "左旋回"
+                                rc("0", "0", "0", f"{-TURN_SPEED}")
+                                time.sleep(0.5)
+                                continue
+                            elif(arrow_pers[0] >= 1.1):
+                                drone_info = "右旋回"
+                                rc("0", "0", "0", f"{TURN_SPEED}")
+                                time.sleep(0.5)
+                                continue
+                        elif(arrow_pers[1] < 0.4):
+                            if(arrow_pers[0] >= 0.63):
+                                drone_info = "右旋回"
+                                rc("0", "0", "0", f"{TURN_SPEED}")
+                                time.sleep(0.5)
+                                continue
+
+                    #arrow_pers[1] 1.0~1.1の範囲内＋追加条件なら回転実行
+                    if(not(arrow_pers[1] >= 1.0 and arrow_pers[1] < 1.1)):
+                        if(old_direction == "Left"):
+                            if(not(arrow_pers[1] > 3.0)):
+                                time.sleep(0.5)
+                                continue
+                        elif(old_direction == "Right"):
+                            if(not(arrow_pers[1] < 0.4)):
+                                time.sleep(0.5)
+                                continue
+
                     drone_info = "回転位置に到着"
                     print(f"OK")
                     rc("0", "0", "0", "0")
                     turn_approved = True
 
                 time.sleep(0.5)
-            continue
-
-        if is_moving & is_avoid:
-            drone_info = "停止"
-            rc("0", "0", "0", "0")
-            time.sleep(5) # 5秒待機
-            is_avoid = False
             continue
 
         if is_moving:
@@ -337,57 +373,18 @@ def move_drone():
 dorone_thread = threading.Thread(target=move_drone)
 dorone_thread.start()
 
-def calc_ttc():
-    """
-    ttc計算処理
-    """
-    global g_frame, frame_buffer, close_count, is_avoid, is_turn, is_exit
-    
-    while not is_exit:
-        if g_frame is None:
-            continue
-
-        # TTC計算
-        ttc_value = ttc.analysis(g_frame)
-        if ttc_value is not None:
-            frame_buffer.append(ttc_value)
-
-        # TTCの平均を計算して警告を出す
-        if len(frame_buffer) == 5:
-            average_ttc = np.mean(frame_buffer)
-            #print(f"TTC: {average_ttc}")
-
-            # 至近距離判定カウント
-            if average_ttc < TTC_THRESHOLD:
-                print(f"TTC: {average_ttc}")
-                print("TTC: Object is very close.")
-                close_count += 1
-                if((not is_avoid) & (not is_turn)):
-                    # 5連続以上で接近判定になったら停止させ回避行動を開始
-                    if(close_count >= 5):
-                        is_avoid = True
-            else:
-                close_count = 0
-
-            frame_buffer = []
-
-        time.sleep(0.1)
-
-# ttc_thread = threading.Thread(target=calc_ttc)
-# ttc_thread.start()
-
 def calc_arrow():
     """
     矢印判定処理
     """
-    global g_frame, arrow_count, old_direction, is_turn, is_avoid, is_exit, frame_queue, arrow_z, arrow_x, arrow_y
+    global g_frame, arrow_count, old_direction, is_turn, is_exit, frame_queue, arrow_z, arrow_x, arrow_y, arrow_pers
 
     while not is_exit:
         if g_frame is None:
             continue
 
         # 矢印判定とカメラ映像取得
-        new_frame, direction, relative, position = arrow.Arrow().analysis(g_frame)
+        new_frame, direction, relative, position, perspective = arrow.Arrow().analysis(g_frame)
         if((direction is not None) & (relative is not None) & (position is not None)):
             lr, ud, dx, dy = position
             show_arrow_info(new_frame, f"Arrow:{direction}, X:{dx}({lr}), Y:{dy}({ud}), Z:{relative}")
@@ -395,16 +392,16 @@ def calc_arrow():
             arrow_x = dx
             arrow_y = dy
             arrow_z = relative
+            arrow_pers = perspective
 
             if(old_direction == direction): arrow_count += 1
             old_direction = direction
 
             # 5回連続で方向検知で方向転換
-            if(not is_avoid):
-                if(arrow_count >= 5):
-                    is_turn = True
-                else:
-                    is_turn = False
+            if(arrow_count >= 5):
+                is_turn = True
+            else:
+                is_turn = False
 
         else:
             is_turn = False
@@ -482,7 +479,6 @@ while True:
 
 cv2.destroyAllWindows()
 arrow_thread.join()
-# ttc_thread.join()
 dorone_thread.join()
 video_thread.join()
 tof_thread.join()
