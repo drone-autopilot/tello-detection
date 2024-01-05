@@ -170,8 +170,8 @@ class Arrow:
                     break
                 else:
                     cv2.drawContours(frame, contour, -1, (0, 0, 255), 3)
-            else:
-                cv2.drawContours(frame, contour, -1, (0, 255, 255), 3)
+            #else:
+                #cv2.drawContours(frame, contour, -1, (0, 255, 255), 3)
 
         # 面積が最大の輪郭
         # max_contour = max(contours, key=lambda x: cv2.contourArea(x))

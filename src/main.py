@@ -47,10 +47,11 @@ TOF_THRESHOLD = 100
 TOF_ERROR_RANGE = 5 # 95-105
 
 # 速度
-X_LOW_SPEED = 5
-X_HIGH_SPEED = 10
-Z_LOW_SPEED = 7
+X_LOW_SPEED = 4
+X_HIGH_SPEED = 8
+Z_LOW_SPEED = 5
 Z_HIGH_SPEED = 15
+Z_BACK_SPEED = 5
 Y_LOW_SPEED = 10
 Y_HIGH_SPEED = 13
 TOF_SPEED = 13
@@ -292,7 +293,7 @@ def move_drone():
                 elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
                     drone_info = "後退する"
                     print(f"後ろへ {arrow_z}")
-                    rc("0", f"{-Z_HIGH_SPEED}", "0", "0")
+                    rc("0", f"{-Z_BACK_SPEED}", "0", "0")
                     
                 else:
                     # 矢印の歪みを確認　気休め程度の角度修正
@@ -336,8 +337,8 @@ def move_drone():
                                 time.sleep(0.5)
                                 continue
 
-                    #arrow_pers[1] 1.0~1.1の範囲内＋追加条件なら回転実行
-                    if(not(arrow_pers[1] >= 1.0 and arrow_pers[1] < 1.1)):
+                    #arrow_pers[1] (0.95)1.0~1.1(1.15)の範囲内＋追加条件なら回転実行
+                    if(not(arrow_pers[1] >= 0.95 and arrow_pers[1] < 1.15)):
                         if(old_direction == "Left"):
                             if(not(arrow_pers[1] > 3.0)):
                                 time.sleep(0.5)
