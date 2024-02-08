@@ -72,6 +72,7 @@ turn_approved = False
 
 is_moving = False
 is_exit = False
+is_manual = False
 
 frame_queue = queue.Queue()
 g_frame = None
@@ -206,7 +207,13 @@ def move_drone():
     global is_moving, is_turn, old_direction, is_exit, turn_approved, arrow_x, arrow_z, arrow_y, drone_info
 
     while True:
+        if is_manual:
+            drone_info = "マニュアルモード"
+            time.sleep(0.1)
+            continue
+
         if not ready:
+            time.sleep(0.1)
             continue
 
         if is_exit:
@@ -470,13 +477,77 @@ def get_tof():
 tof_thread = threading.Thread(target=get_tof)
 tof_thread.start()
 
+def check_elapsed_time(start_time, duration_ms):
+    current_time = time.time() * 1000  # 現在の時間をミリ秒単位で取得
+    elapsed_time = current_time - start_time
+    return elapsed_time >= duration_ms
+
+start_time = time.time() * 1000
+duration_ms = 100
+
 while True:
     frame = show_drone_info(frame_queue.get())
     cv2.imshow("Tello-Detection", frame)
     if not ready: ready = True
-    if cv2.waitKey(1) & 0xFF == 27:
+    pre_key = cv2.waitKey(1)
+    key = pre_key & 0xFF
+    shift_pressed = bool(key & 0x01000000)
+
+    if key == 27: #ESC
+        is_manual = False
         is_exit = True
         break
+    elif key == ord('m'):
+        is_manual = not is_manual
+        start_time = time.time() * 1000
+
+    #以下、マニュアルモード時の動作
+    #sleep以外の連続送信対策
+    elif (key == ord('w')) and is_manual:
+        #250ms経っているかどうか
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc("0", f"{Z_HIGH_SPEED}", "0", "0")
+            start_time = time.time() * 1000
+    elif (key == ord('a')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc(f"{-X_HIGH_SPEED}", "0", "0", "0")
+            start_time = time.time() * 1000
+    elif (key == ord('s')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc("0", f"{-Z_HIGH_SPEED}", "0", "0")
+            start_time = time.time() * 1000
+    elif (key == ord('d')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc(f"{X_HIGH_SPEED}", "0", "0", "0")
+            start_time = time.time() * 1000
+    elif (key == ord('q')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc("0", "0", "0", f"{-TURN_SPEED}")
+            start_time = time.time() * 1000
+    elif (key == ord('e')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc("0", "0", "0", f"{TURN_SPEED}")
+            start_time = time.time() * 1000
+    elif (key == ord(' ')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc("0", "0", f"{Y_HIGH_SPEED}", "0")
+            start_time = time.time() * 1000
+    elif shift_pressed and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc("0", "0", f"{-Y_HIGH_SPEED}", "0")
+            start_time = time.time() * 1000
+    elif (key == ord('f')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            takeoff()
+            start_time = time.time() * 1000
+    elif (key == ord('r')) and is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            land()
+            start_time = time.time() * 1000
+    elif is_manual:
+        if(check_elapsed_time(start_time, duration_ms)):
+            rc("0", "0", "0", "0")
+            start_time = time.time() * 1000
 
 cv2.destroyAllWindows()
 arrow_thread.join()
