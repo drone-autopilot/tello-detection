@@ -160,6 +160,8 @@ class Arrow:
         max_contour = None
         max_approx = None  # 近似輪郭も保存
 
+        arrow_i = -1
+        contour_i = 0
         for contour in contours_sorted:
             epsilon = 0.03 * cv2.arcLength(contour, True)
             approx = cv2.approxPolyDP(contour, epsilon, True)
@@ -170,8 +172,17 @@ class Arrow:
                     break
                 else:
                     cv2.drawContours(frame, contour, -1, (0, 0, 255), 3)
+                    arrow_i = contour_i
             #else:
                 #cv2.drawContours(frame, contour, -1, (0, 255, 255), 3)
+            contour_i = contour_i + 1 
+                    
+        contour_i = 0
+        for contour2 in contours_sorted:
+            if(not contour_i == arrow_i):
+                cv2.drawContours(frame, contour2, -1, (0, 255, 255), 3)
+                break
+            contour_i = contour_i + 1 
 
         # 面積が最大の輪郭
         # max_contour = max(contours, key=lambda x: cv2.contourArea(x))

@@ -57,6 +57,9 @@ Y_HIGH_SPEED = 13
 TOF_SPEED = 13
 TURN_SPEED = 10
 
+MANUAL_SPEED = 15
+MANUAL_TURN = 35
+
 ready = False
 
 frame_buffer = []
@@ -129,6 +132,8 @@ def show_drone_info(frame):
     # テキストの位置を設定
     text_offset_x = 10
     text_offset_y = 670
+    if(is_manual):
+        text_offset_y = 630
 
     # 縁取り文字の設定
     text_color = (255, 255, 255)  # 白色
@@ -208,7 +213,7 @@ def move_drone():
 
     while True:
         if is_manual:
-            drone_info = "マニュアルモード"
+            drone_info = "マニュアルモード [V:停止] [WASD:前左後右] [QE:左旋右旋]\n　　　　　　　　 [Space:上] [TAB:下] [R:着陸] [F:離陸] [M:終了]"
             time.sleep(0.1)
             continue
 
@@ -477,21 +482,11 @@ def get_tof():
 tof_thread = threading.Thread(target=get_tof)
 tof_thread.start()
 
-def check_elapsed_time(start_time, duration_ms):
-    current_time = time.time() * 1000  # 現在の時間をミリ秒単位で取得
-    elapsed_time = current_time - start_time
-    return elapsed_time >= duration_ms
-
-start_time = time.time() * 1000
-duration_ms = 100
-
 while True:
     frame = show_drone_info(frame_queue.get())
     cv2.imshow("Tello-Detection", frame)
     if not ready: ready = True
-    pre_key = cv2.waitKey(1)
-    key = pre_key & 0xFF
-    shift_pressed = bool(key & 0x01000000)
+    key = cv2.waitKey(1) & 0xFF
 
     if key == 27: #ESC
         is_manual = False
@@ -499,55 +494,42 @@ while True:
         break
     elif key == ord('m'):
         is_manual = not is_manual
-        start_time = time.time() * 1000
+        rc("0", "0", "0", "0", True)
 
     #以下、マニュアルモード時の動作
-    #sleep以外の連続送信対策
     elif (key == ord('w')) and is_manual:
-        #250ms経っているかどうか
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc("0", f"{Z_HIGH_SPEED}", "0", "0")
-            start_time = time.time() * 1000
+        rc("0", f"{MANUAL_SPEED}", "0", "0")
+        start_time = time.time() * 1000
     elif (key == ord('a')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc(f"{-X_HIGH_SPEED}", "0", "0", "0")
-            start_time = time.time() * 1000
+        rc(f"{-MANUAL_SPEED}", "0", "0", "0")
+        start_time = time.time() * 1000
     elif (key == ord('s')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc("0", f"{-Z_HIGH_SPEED}", "0", "0")
-            start_time = time.time() * 1000
+        rc("0", f"{-MANUAL_SPEED}", "0", "0")
+        start_time = time.time() * 1000
     elif (key == ord('d')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc(f"{X_HIGH_SPEED}", "0", "0", "0")
-            start_time = time.time() * 1000
+        rc(f"{MANUAL_SPEED}", "0", "0", "0")
+        start_time = time.time() * 1000
     elif (key == ord('q')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc("0", "0", "0", f"{-TURN_SPEED}")
-            start_time = time.time() * 1000
+        rc("0", "0", "0", f"{-MANUAL_TURN}")
+        start_time = time.time() * 1000
     elif (key == ord('e')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc("0", "0", "0", f"{TURN_SPEED}")
-            start_time = time.time() * 1000
+        rc("0", "0", "0", f"{MANUAL_TURN}")
+        start_time = time.time() * 1000
     elif (key == ord(' ')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc("0", "0", f"{Y_HIGH_SPEED}", "0")
-            start_time = time.time() * 1000
-    elif shift_pressed and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc("0", "0", f"{-Y_HIGH_SPEED}", "0")
-            start_time = time.time() * 1000
+        rc("0", "0", f"{MANUAL_SPEED}", "0")
+        start_time = time.time() * 1000
+    elif (key == 9) and is_manual: #TAB
+        rc("0", "0", f"{-MANUAL_SPEED}", "0")
+        start_time = time.time() * 1000
     elif (key == ord('f')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            takeoff()
-            start_time = time.time() * 1000
+        takeoff()
+        start_time = time.time() * 1000
     elif (key == ord('r')) and is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            land()
-            start_time = time.time() * 1000
-    elif is_manual:
-        if(check_elapsed_time(start_time, duration_ms)):
-            rc("0", "0", "0", "0")
-            start_time = time.time() * 1000
+        land()
+        start_time = time.time() * 1000
+    elif (key == ord('v')) and is_manual:
+        rc("0", "0", "0", "0", True)
+        start_time = time.time() * 1000
 
 cv2.destroyAllWindows()
 arrow_thread.join()
