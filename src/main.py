@@ -9,29 +9,11 @@ import queue
 import socket
 import json
 
-#                                                                                                                                              
-#                                                                                                 ■■             ■             ■               
-#                                                                                          ■■    ■■          ■■■■■■  ■■■■■■■■■■■             ■ 
-# ■■■■■■■■■■        ■■■■■■■■■■■■   ■■■■■■■■■■     ■■■■■■■   ■■■■■■        ■■■■■■     ■■■■■■■■ ■  ■■     ■                ■    ■■            ■■■
-#   ■■■    ■■■        ■■■      ■     ■■■    ■■      ■■         ■        ■■■    ■■■      ■     ■■■■■■■■■■■■         ■    ■■    ■■            ■■■
-#   ■■■      ■■       ■■■      ■     ■■■     ■■     ■■         ■      ■■■       ■■     ■■    ■■ ■■     ■■   ■■■■■■■■■ ■■■■    ■■            ■■■
-#   ■■■       ■■      ■■■      ■     ■■■     ■■     ■■         ■      ■■        ■■     ■■    ■  ■■ ■■  ■                ■■■   ■■            ■■■
-#   ■■■       ■■■     ■■■            ■■■     ■■     ■■         ■     ■■         ■■     ■        ■  ■                   ■■ ■■  ■■            ■■ 
-#    ■■        ■■      ■■             ■■     ■■     ■■         ■     ■■                ■       ■■  ■   ■■    ■■■■■■    ■■  ■  ■■            ■■ 
-#    ■■        ■■      ■■    ■        ■■     ■■     ■■         ■    ■■■                ■■■■■■  ■■■■■■■■■■             ■■      ■             ■■ 
-#    ■■        ■■      ■■   ■■        ■■   ■■■      ■■         ■    ■■■               ■■   ■  ■■   ■                  ■    ■■■■             ■■ 
-#    ■■        ■■      ■■■■■■■        ■■■■■■        ■■         ■    ■■■               ■■   ■ ■ ■   ■   ■     ■■■■■■  ■      ■■               ■ 
-#    ■■        ■■      ■■   ■■        ■■    ■■■     ■■         ■    ■■■      ■■■■■■  ■■■   ■   ■■■■■■■■■■               ■■■                  ■ 
-#    ■■        ■■      ■■    ■        ■■     ■■■    ■■         ■    ■■■         ■■   ■ ■   ■   ■   ■                      ■■                 ■ 
-#    ■■        ■■      ■■             ■■      ■■    ■■         ■     ■■         ■■     ■   ■   ■   ■         ■■■■■■■   ■■  ■                 ■ 
-#    ■■       ■■       ■■             ■■      ■■    ■■        ■■     ■■         ■■     ■   ■   ■   ■   ■     ■    ■  ■ ■■     ■              ■ 
-#    ■■       ■■      ■■■       ■    ■■■      ■■     ■■       ■       ■■        ■■     ■   ■   ■■■■■■■■■■    ■    ■  ■ ■■      ■               
-#   ■■■      ■■       ■■■      ■■    ■■■     ■■■     ■■■     ■■       ■■■       ■■     ■   ■   ■   ■         ■    ■  ■ ■■      ■■              
-#   ■■■    ■■■        ■■■      ■■    ■■■    ■■■       ■■■■■■■■          ■■■    ■■■     ■■■■■   ■   ■         ■    ■ ■■ ■■      ■■           ■■ 
-# ■■■■■■■■■■        ■■■■■■■■■■■■■  ■■■■■■■■■■          ■■■■■■            ■■■■■■■       ■   ■   ■   ■   ■■    ■■■■■■ ■  ■■    ■ ■■           ■■■
-#                                                                                      ■       ■■■■■■■■■■    ■    ■    ■■    ■               ■ 
-#                                                                                              ■             ■          ■■■■■■                 
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""";debug = True;""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！
+# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！
+debug = True
+# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！
+# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！# DEBUG確認！
 
 # 矢印判定のしきい値
 ARROW_Z_THRESHOLD = 80000
@@ -228,7 +210,7 @@ def move_drone():
             break
 
         if not is_moving:
-            drone_info = "離陸する"
+            drone_info = "離陸"
             is_moving = True
             takeoff()
             time.sleep(5) # 2秒待機
@@ -237,7 +219,7 @@ def move_drone():
         if is_moving & is_turn:
             if turn_approved:
                 if(old_direction == "Left"):
-                    drone_info = "左へ回転"
+                    drone_info = "左へ90度回転"
                     ccw("90")
                     time.sleep(2) # 2秒待機
                     is_turn = False
@@ -245,7 +227,7 @@ def move_drone():
                     continue
 
                 elif(old_direction == "Right"):
-                    drone_info = "右へ回転"
+                    drone_info = "右へ90度回転"
                     cw("90")
                     time.sleep(2) # 2秒待機
                     is_turn = False
@@ -260,7 +242,7 @@ def move_drone():
                 # 一番ズレの大きい方向を優先して移動する(距離は除外)
                 if(arrow_y < ARROW_Y_THRESHOLD - ARROW_Y_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "y_diff"):
-                        drone_info = "上昇する"
+                        drone_info = "上昇"
                         print(f"上へ {arrow_y}")
                         if(arrow_z < 30000):
                             rc("0", "0", f"{Y_HIGH_SPEED}", "0")
@@ -269,7 +251,7 @@ def move_drone():
 
                 elif(arrow_y > ARROW_Y_THRESHOLD + ARROW_Y_ERROR_RANGE):
                     if(max(deltas, key=deltas.get) == "y_diff"):
-                        drone_info = "下降する"
+                        drone_info = "下降"
                         print(f"下へ {arrow_y}")
                         if(arrow_z < 30000):
                             rc("0", "0", f"{-Y_HIGH_SPEED}", "0")
@@ -295,7 +277,7 @@ def move_drone():
                             rc(f"{X_LOW_SPEED}", "0", "0", "0")
 
                 elif(arrow_z < ARROW_Z_THRESHOLD - ARROW_Z_ERROR_RANGE):
-                    drone_info = "前進する"
+                    drone_info = "前進"
                     print(f"前へ {arrow_z}")
                     if(arrow_z < 30000):
                         rc("0", f"{Z_HIGH_SPEED}", "0", "0")
@@ -303,7 +285,7 @@ def move_drone():
                         rc("0", f"{Z_LOW_SPEED}", "0", "0")
 
                 elif(arrow_z > ARROW_Z_THRESHOLD + ARROW_Z_ERROR_RANGE):
-                    drone_info = "後退する"
+                    drone_info = "後退"
                     print(f"後ろへ {arrow_z}")
                     rc("0", f"{-Z_BACK_SPEED}", "0", "0")
                     
@@ -370,13 +352,13 @@ def move_drone():
 
         if is_moving:
             if(tof < TOF_THRESHOLD - TOF_ERROR_RANGE):
-                drone_info = "上昇する"
+                drone_info = "上昇"
                 rc("0", "0", f"{TOF_SPEED}", "0")
             elif(tof > TOF_THRESHOLD + TOF_ERROR_RANGE):
-                drone_info = "下降する"
+                drone_info = "下降"
                 rc("0", "0", f"{-TOF_SPEED}", "0")
             else:
-                drone_info = "前進する"
+                drone_info = "前進"
                 rc("0", f"{Z_HIGH_SPEED}", "0", "0")
             time.sleep(0.5) # 0.5待機
             continue
